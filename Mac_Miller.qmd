@@ -1,0 +1,349 @@
+---
+title: "Mac Miller: Most Dope Lyrics"
+author: "Anna Buffone"
+format: html
+---
+Those who know Mac Miller know that he was the "Most Dope" rapper from Pittsburgh, PA. Growing up with siblings around his age and living close to Pitssburgh, I was exposed to his music from a young age. His signature catchphrase "Most Dope" stands for being the best, cool, and excellent. This represents his brand of being energetic and carefree. Later, he said it was a lifestyle embraced by him and his close friends. In this notebook, I wanted to see which of his songs had the most "dope" mentions in the lyrics.
+
+To begin, I had to install the lyricsgenius library into my coding environment. Then, I activated the library into my script. 
+```{python}
+import sys
+!{sys.executable} -m pip install --upgrade lyricsgenius
+
+import lyricsgenius
+print("lyricsgenius imported successfully!")
+
+```
+For this analysis, I used a scraping pipeline to get the lyrics for all of Mac Miller's songs. I used the lyricsgenius library to access the Genius API and retrieve the song information and lyrics. I also implemented a caching mechanism to save the scraped data into a CSV file, so that I don't have to scrape the data again in the future. This way, I can load the existing data from the CSV file if it already exists, which saves time and resources. 
+```{python}
+from bs4 import BeautifulSoup
+from joblib import Parallel, delayed
+import numpy as np
+import pandas as pd
+import re
+import requests
+import time
+import lyricsgenius 
+import os 
+
+genius = lyricsgenius.Genius('vIo1zdRRWxX16A8N6EskD52Hcz0DP8KmFeKqkY32oMediLjC-pUiHYoILQx-TeUb', skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"], remove_section_headers=True, timeout=30)
+
+
+id = 'S6MtzxA7RXPxQiLNAuATCTv9VQ3k17nuAXQWkt_txCR7N2pZwpoKVde-FPbMRFE9'
+secret = 'vIo1zdRRWxX16A8N6EskD52Hcz0DP8KmFeKqkY32oMediLjC-pUiHYoILQx-TeUb'    
+headers = {'Authorization': 'Bearer ' + secret}
+
+
+def get_genius_link(link):
+    time.sleep(np.random.uniform(.1, .5, 1)[0])
+    try:
+        req_json = requests.get(link, headers=headers).json()
+        song_id = req_json['response']['hits'][0]['result']['id']
+        returned_song = req_json['response']['hits'][0]['result']['title']
+        returned_artist = req_json['response']['hits'][0]['result']['primary_artist']['name']
+        song_link = 'https://api.genius.com/' + 'songs/' + str(song_id)
+        req_json = requests.get(song_link, headers=headers).json()
+        lyrics_link = req_json['response']['song']['url']
+        result = pd.DataFrame({'song': returned_song, 
+                               'artist': returned_artist, 
+                               'lyrics_link': lyrics_link, 
+                               'query': link}, index=[0])
+        return result
+    except:
+        return pd.DataFrame({'song': None, 
+                               'artist': None, 
+                               'lyrics_link': None, 
+                               'query': link}, index=[0])
+
+artist = genius.search_artist(
+    "Mac Miller",
+    max_songs=None,
+    sort="title"
+)
+
+def lyric_getter(url):
+    try:
+        time.sleep(np.random.uniform(.5, 1, 1)[0])
+        lyrics = requests.get(url, headers=headers)
+        if lyrics.status_code != 200:
+            print("status code error: " + url)
+            return
+        lyric_soup = BeautifulSoup(lyrics.text, 'html.parser')
+        lyrics_return = lyric_soup.select('#lyrics-root-pin-spacer')
+        lyrics_return = lyrics_return[0].get_text()
+        lyrics_return = re.sub(r'([a-z])([A-Z])', '\\1 \\2', lyrics_return)
+        lyrics_return = re.sub(r'\[.*?\]', ' ', lyrics_return)
+        lyrics_return = re.sub(r'^.*Lyrics ', '', lyrics_return)
+        return lyrics_return
+    except:
+        return None
+
+file = "mac_miller_lyrics.csv"
+
+if os.path.exists(file) and os.path.getsize(file) > 0:
+    print("File already exists. Loading existing data.")
+    df = pd.read_csv(file)
+else:
+    print("Scraping lyrics from Genius") 
+
+data = []
+
+for song in artist.songs:
+    title = song.title
+    album = song.album if song.album else "Unknown"
+    lyrics = song.lyrics
+
+    lyrics_clean = re.sub(r'\[.*?\]', ' ', lyrics)
+    lyrics_clean = re.sub(r'\s+', ' ', lyrics_clean).strip()
+    
+    data.append({
+        "song": title,
+        "album": album,
+        "lyrics": lyrics_clean
+    })
+
+    df = pd.DataFrame(data)
+    df.to_csv(file, index=False)
+
+    print("Saved to:", file)
+
+    print("Songs Loaded:", len(df))
+    print(df.head())
+```
+
+```{python}
+import pandas as pd
+import os
+
+file = "mac_miller_lyrics.csv"
+
+if os.path.exists(file) and os.path.getsize(file) > 0:
+    print("Loading saved lyrics CSV")
+    df = pd.read_csv(file)
+else:
+    raise FileNotFoundError(
+        "CSV not found. Run the scraping cell once to create mac_miller_lyrics.csv"
+    )
+
+df.head()
+```
+
+Once the data was loaded and prepared, I preformed a simple analysis to count the number of times "dope" was mentioned in each song. I used the str.count() method with a regular expression to make sure that only whole word matches were counted. Then, I summed up the counts to get the total number of "dope" mentions across all songs. Finally, I aggregated these counts to determine the total mentions across his career, providing a look at how his signature catchphrase evolved through his music. From this, I found that "dope" was mentioned 130 times across all of his songs.
+```{python}
+df["dope_count"] = df["lyrics"].str.lower().str.count(r"\bdope\b")
+
+total_dope = df["dope_count"].sum()
+print("Total dope count:", total_dope)
+
+
+print(df.head())
+print("Total 'dope' count:", df["dope_count"].sum())
+
+```
+
+In this step, I had to learn how to clean the album names and song titles in the dataset. The album names and song titles were stored as strings that contained dictionaries, which made it difficult to analyze the data. I used the ast.literal_eval() function to evaluate the string as aliteral and extract the "name" field from the dictionary. I applied this process to both the "album" and "song" columns in the DataFrame to create new columns with clean album names and song titles. After cleaning the data, I was able to perform analysis on the frequency of "dope" mentions by album and by song. I then used the groupby() method to group the data by album and sum the "dope" counts for each album. Finally, I sorted the results in descending order to see which albums had the most "dope" mentions. From this I found that the album "K.I.D.S." had the most "dope" mentions, with a total of 13 mentions across all songs in that album. THe most overall was "Unknown" though, which had 63 mentions.
+```{python}
+import ast 
+
+clean_albums = []
+
+for entry in df["album"]:
+    if isinstance(entry, str) and entry.startswith("{"):
+        name = ast.literal_eval(entry)["name"]
+        clean_albums.append(name)
+    else:
+            clean_albums.append(entry)
+
+df["album"] = clean_albums
+
+album_count = (
+    df.groupby("album")["dope_count"].sum().sort_values(ascending = False)
+)
+
+album_count
+```
+
+
+```{python}
+import pandas as pd
+import plotnine as p9
+from plotnine import ggplot, aes, geom_point, theme_minimal, labs
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from PIL import Image
+import glob
+import os
+import re
+
+def clean_album(name):
+    if pd.isna(name):
+        return name
+    name = re.sub(r"\(.*?\)", "", name)
+    name = name.replace("*", "")
+    name = name.strip()
+    return name
+
+album_count_clean = (
+    album_count
+    .rename_axis("album")
+    .reset_index(name="dope_count")
+)
+
+album_count_clean["album"] = album_count_clean["album"].apply(clean_album)
+
+album_count_clean = (
+    album_count_clean
+    .groupby("album", as_index=False)["dope_count"]
+    .sum()
+)
+
+df_counts = album_count_clean.sort_values("dope_count").reset_index(drop=True)
+
+image_folder = "/Users/annabuffone04/Downloads/Mac_Miller_Covers/"
+file_list = glob.glob(os.path.join(image_folder, "*.png"))
+
+def normalize(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+def match_image(album_name, paths):
+    album_key = normalize(album_name)
+    
+    for p in paths:
+        fname = normalize(os.path.splitext(os.path.basename(p))[0])
+        if album_key in fname or fname in album_key:
+            return p
+    
+    return None
+
+df_counts["image_path"] = df_counts["album"].apply(lambda x: match_image(x, file_list))
+
+df_counts = df_counts.dropna(subset=["image_path"]).reset_index(drop=True)
+
+df_counts["x"] = range(len(df_counts))
+
+def plot_final_discography(df):
+    p = (
+        ggplot(df, aes("x", "dope_count"))
+        + geom_point(alpha=0)
+        + theme_minimal()
+        + labs(
+            title="Mac Miller: 'Dope' Count by Album",
+            x="Album",
+            y="Total 'Dope' Count",
+        )
+        + p9.scale_x_continuous(
+            breaks=df["x"].tolist(),
+            labels=df["album"].tolist(),
+        )
+        + p9.coord_cartesian(
+            xlim=(-0.5, df["x"].max() + 0.5),
+            ylim=(0, df["dope_count"].max() + 20),
+        )
+    )
+
+    fig = p.draw()
+    fig.set_size_inches(14, 6)
+    ax = fig.axes[0]
+
+    for _, row in df.iterrows():
+        img = Image.open(row["image_path"]).convert("RGBA")
+        img = img.resize((200, 200), Image.Resampling.LANCZOS)
+
+        imagebox = OffsetImage(img, zoom=0.3)
+        ab = AnnotationBbox(imagebox, (row["x"], row["dope_count"]), frameon=False)
+        ax.add_artist(ab)
+
+        ax.text(
+            row["x"],
+            row["dope_count"] + 2,
+            str(int(row["dope_count"])),
+            ha="center",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+    return fig
+
+final_fig = plot_final_discography(df_counts)
+final_fig
+```
+
+I repeated a similar process for the song titles to see which songs had the most "dope" mentions.
+```{python}
+clean_songs = []
+
+for entry in df["song"]:
+    if isinstance(entry, str) and entry.startswith("{"):
+        name = ast.literal_eval(entry)["name"]
+        clean_songs.append(name)
+    else:
+        clean_songs.append(entry)
+
+df["song"] = clean_songs
+
+
+song_count = (
+    df.groupby("song")["dope_count"].sum().sort_values(ascending = False)
+)
+
+song_count
+```
+
+While viewing the results, I noticed that some songs were missing from the analysis. I wanted to check if any of the songs with "Kickin" or "Incredibly" in the title were included in the dataset, as these are some of Mac Miller's popular songs with the word "dope". I used the str.contains() method to filter the DataFrame for any songs that contained either "Kickin" or "Incredibly" in their title, ignoring case sensitivity. This allowed me to see if those specific songs were included in the dataset and how many "dope" mentions they had.
+```{python}
+unknown_songs = df[df['album'] == 'Unknown'].sort_values(by='dope_count', ascending=False)
+print(unknown_songs[['song', 'dope_count']].head(10))
+```
+
+```{python}
+missing_song = df[df['song'].str.contains('Kickin|Incredibly', case=False, na=False)]
+print(missing_song[['song', 'album', 'dope_count']])
+```
+
+After reviewing these results, I found that the song was included, but did not have the right count. When doing some research, I found that the lyrics at the beginning and at the end when the song is fading out may not be included in the Genius API lyrics, which could explain why the count was lower than expected. Another issue I came across was the amount of "Unknown" albums in the dataset.  Mac Miller had many songs that were released as singles or were not part of a specific album, which could contribute to the high number of "Unknown" albums in the dataset. This is a common issue when working with music data from APIs. It highlights the importance of being aware of the limitations of the data source when conducting analysis. Despite these issues, the analysis still provided valuable insights into the frequency of "dope" mentions in Mac Miller's songs and how it varied across different albums and songs. It also highlighted the importance of data cleaning and validation when working with real-world datasets, especially those obtained from web scraping or APIs.
+
+To wrap up the analysis, I wanted to see the overall sentiment of the songs that mentioned "dope". I used TextBlob to perform sentiment analysis on the lyrics of the songs that had at least one mention of "dope". I defined a function called song_sentiment() that takes in the lyrics of a song and returns the polarity score, which ranges from -1 (negative sentiment) to 1 (positive sentiment). I then applied this function to the lyrics of the songs that mentioned "dope" and calculated the average sentiment score for those songs. This let me see if there was any correlation between the frequency of "dope" mentions and the overall sentiment of the songs. This gave a score of 0.052, which suggests that the songs that mentioned "dope" had a slightly positive sentiment on average.
+```{python}
+from textblob import TextBlob
+
+def song_sentiment(lyrics):
+    blob = TextBlob(lyrics)
+    return blob.sentiment.polarity
+
+dope_songs = df[df['dope_count'] > 0].copy()
+dope_songs['sentiment'] = dope_songs['lyrics'].apply(song_sentiment)
+
+dope_songs['sentiment'].mean()
+```
+
+To visualize the relationship between the frequency of "dope" mentions and the sentiment of the songs, I created a scatter plot. I plotted the number of "dope" mentions on the x-axis and the sentiment score on the y-axis, with colors representing different albums. This let me see if there was any pattern between the two variables. The plot showed that there was no clear correlation between the frequency of "dope" mentions and the sentiment of the songs, suggesting that the use of "dope" in Mac Miller's lyrics was not necessarily tied to a specific emotional tone or theme in his music.
+```{python}
+from textblob import TextBlob
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+dope_df = df[df['dope_count'] > 0].copy()
+
+def song_sentiment(lyrics):
+    blob = TextBlob(lyrics)
+    return blob.sentiment.polarity
+
+dope_df['sentiment'] = dope_df['lyrics'].apply(song_sentiment)
+
+print(dope_df[['song', 'sentiment']].head(10))
+
+dope_df['sentiment_bin'] = pd.cut(dope_df['sentiment'], 
+                                 bins=[-1.1, -0.1, 0.1, 1.1], 
+                                 labels=['Negative', 'Neutral', 'Positive'])
+
+
+plt.figure(figsize=(12, 6))
+sns.scatterplot(data=dope_df, x='dope_count', y='sentiment', hue='sentiment_bin', palette='Set2', s=100)
+
+plt.title('Sentiment vs. "Dope" Frequency in Mac Miller Songs')
+plt.xlabel('Number of times "Dope" is mentioned')
+plt.ylabel('Sentiment Score (Polarity)')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+```
