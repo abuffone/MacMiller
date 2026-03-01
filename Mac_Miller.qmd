@@ -26,11 +26,11 @@ import time
 import lyricsgenius 
 import os 
 
-genius = lyricsgenius.Genius('vIo1zdRRWxX16A8N6EskD52Hcz0DP8KmFeKqkY32oMediLjC-pUiHYoILQx-TeUb', skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"], remove_section_headers=True, timeout=30)
+genius = lyricsgenius.Genius('Your_Key', skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"], remove_section_headers=True, timeout=30)
 
 
-id = 'S6MtzxA7RXPxQiLNAuATCTv9VQ3k17nuAXQWkt_txCR7N2pZwpoKVde-FPbMRFE9'
-secret = 'vIo1zdRRWxX16A8N6EskD52Hcz0DP8KmFeKqkY32oMediLjC-pUiHYoILQx-TeUb'    
+id = 'Your_Key'
+secret = 'Your_Key'    
 headers = {'Authorization': 'Bearer ' + secret}
 
 
